@@ -34,10 +34,11 @@ CPG (Carolina Pathology Group) needs to automatically identify cases with non-pa
 ### 2. OCR Module + Quality Scoring (`src/ocr.py`)
 - Tesseract OCR with auto-detection (PATH, then common Windows install locations)
 - Accepts PDF, TIFF (multi-page), JPEG, PNG, BMP inputs
-- Pre-processing pipeline: grayscale → denoise → adaptive threshold → deskew
+- Pre-processing pipeline: DPI normalization → grayscale → median blur → adaptive threshold → morphological cleanup → deskew → border padding
 - **Scan quality assessment** via Tesseract per-word confidence data:
   - Returns average confidence score (0-100%), word count, low-confidence word count
-  - Quality labels: `good` (70%+), `fair` (40-70%), `poor` (<40%), `unreadable` (0 words)
+  - Quality labels: `good` (78%+), `fair` (40-78%), `poor` (<40%), `unreadable` (0 words)
+  - Single Tesseract call per page (text reconstructed from confidence data)
 - Non-ASCII Windows path support via numpy buffer fallback for OpenCV
 - Page-break-delimited output for multi-page documents
 
@@ -73,7 +74,8 @@ CPG (Carolina Pathology Group) needs to automatically identify cases with non-pa
 - Context manager (`db.connection()`) ensures connections always close
 - Tracks: filename, filepath, timestamp, OCR text, extracted fields, status, match details, **OCR quality score + label**
 - Statuses: `flagged`, `clear`, `needs_review`, `handled`, `error`, `skipped`, `poor_scan`
-- Deduplication by filename (duplicate inserts return -1, no crash)
+- Deduplication by filepath (unique constraint on full path, not filename)
+- SQL column whitelist validation on insert
 - Auto-migration: adds `ocr_quality` columns to existing databases
 
 ### 7. Reporter (`src/reporter.py`)
@@ -85,7 +87,8 @@ CPG (Carolina Pathology Group) needs to automatically identify cases with non-pa
 ### 8. Folder Watcher (`src/watcher.py`)
 - Uses `watchdog` with queue-based architecture (non-blocking event handler)
 - Worker thread processes files from queue
-- **File-ready detection**: waits for file size to stabilize before processing (handles slow network writes)
+- **File-ready detection**: waits for 3 consecutive stable file size checks before processing
+- **Startup catchup scan**: processes files that arrived while watcher was offline
 - Supports recursive subdirectory watching
 - Logs all results to console
 
@@ -101,9 +104,12 @@ CPG (Carolina Pathology Group) needs to automatically identify cases with non-pa
   - Poor/unreadable scans show `!!` indicator
 - **All Cases view:** filterable by status (flagged, needs_review, poor_scan, clear, handled, error)
 - **Blocklist editor:** edit CSV in browser with validation (column check, size limit, atomic write)
+- **File upload** — scan upload card on dashboard with drag-and-drop support
 - **CSV/Excel export** from the UI
 - **Error handling:** global error handler returns friendly page (never shows stack traces to staff)
+- **Production server:** Waitress WSGI server (4 threads) when available, Flask dev server as fallback
 - Binds to `0.0.0.0` so accessible from other machines on the network
+- 50MB upload size limit
 
 ### 10. CLI (`run.py`)
 ```
@@ -156,6 +162,29 @@ The codebase has been audited and hardened for enterprise reliability:
 - [x] Tesseract OCR installed and tested via Scoop
 - [x] Full test suite passing (34+ tests)
 
+### Phase 1.5: Critical Fixes + Code Review — COMPLETE
+- [x] **2x OCR speedup** — eliminated double Tesseract call in quality assessment
+- [x] **PSM 3 auto page segmentation** — better accuracy on structured forms
+- [x] **DPI normalization** — upscales low-DPI faxes (200→300 DPI) before OCR
+- [x] **Faster preprocessing** — replaced slow NLMeans denoising with median blur
+- [x] **Morphological cleanup** — repairs broken characters, removes speckle noise
+- [x] **White border padding** — prevents edge artifacts confusing Tesseract
+- [x] **Raised quality threshold** — 70%→78% for stricter medical document accuracy
+- [x] **Duplicate filepath bug fix** — unique constraint moved from filename to filepath
+- [x] **SQL column whitelist** — prevents column name injection in insert_result()
+- [x] **Startup catchup scan** — watcher processes files dropped during downtime
+- [x] **Stabilized file-ready check** — 3 consecutive stable checks (was 1)
+- [x] **Removed per-request init_db()** — lazy initialization via before_request
+- [x] **Security hardening** — random Flask secret key, 50MB upload limit
+- [x] **Connection leak fix** — cmd_status now uses context manager
+- [x] **Centralized logging** — moved basicConfig from library module to entry point
+- [x] **File upload from web UI** — scan upload card on dashboard
+- [x] **Docker containerization** — Dockerfile + docker-compose for portable deployment
+- [x] **Portable Windows deployment** — setup.bat, start scripts, NSSM service installer, health check
+- [x] **User guide** — plain-language USER_GUIDE.md for scanning staff
+- [x] **Deployment guide** — DEPLOY.md covering Docker + portable Windows methods
+- [x] **GitHub repo** — https://github.com/mvbiv4/insurance-sorting
+
 ### Phase 2: Production Integration — BLOCKED (waiting on CPG info)
 - [ ] Real blocklist from CPG billing (non-participating insurance names + ID prefixes)
 - [ ] Point at actual scanned reqs folder path
@@ -164,6 +193,36 @@ The codebase has been audited and hardened for enterprise reliability:
 - [ ] Tune scan quality thresholds based on real fax/scan quality
 - [ ] Install Python + Tesseract on the enterprise VM
 - [ ] Set up Windows Task Scheduler for watcher + web dashboard
+
+### Phase 3: Professional Software Maturity
+- [ ] **Authentication** — session-based login with hashed credentials (required before network deployment)
+- [ ] **CSRF protection** — Flask-WTF tokens on all POST forms
+- [ ] **CI/CD pipeline** — GitHub Actions running tests + lint on every push
+- [ ] **pyproject.toml + versioning** — proper Python package with semantic versioning
+- [ ] **Config management** — external config.yaml for thresholds, ports, paths (no hardcoded values)
+- [ ] **File-based logging** — RotatingFileHandler, 5MB per file, 5 file retention
+- [ ] **Database migrations** — Alembic for schema evolution instead of manual ALTER TABLE
+- [ ] **Automated backup** — SQLite hot backup via connection.backup() API, scheduled weekly
+- [ ] **Health monitoring** — /health endpoint checking DB, watcher heartbeat, disk space
+- [ ] **Watcher heartbeat** — write timestamp file every cycle, dashboard banner when stale
+- [ ] **README.md** — GitHub-facing project overview
+- [ ] **LICENSE** — appropriate open-source or proprietary license
+- [ ] **Code quality tooling** — ruff linting, black formatting, mypy type checking
+- [ ] **Error alerting** — email/Teams notification when watcher dies or error rate spikes
+
+### Phase 4: Advanced Features (Post Go-Live)
+- [ ] **Local LLM fallback** — Ollama + Qwen2.5-3B for extracting data from noisy OCR text
+- [ ] **PaddleOCR secondary engine** — run both OCR engines, use higher-confidence result
+- [ ] **Template-based ROI extraction** — crop specific form regions for targeted OCR
+- [ ] **Phonetic matching** — Double Metaphone for OCR-garbled insurance names
+- [ ] **Insurance alias table** — canonical name mapping (BCBS→Blue Cross Blue Shield, etc.)
+- [ ] **Statistics/trends page** — cases per day, top flagged insurances, OCR quality trends
+- [ ] **Audit log** — track who marked what as handled, with timestamps and IP addresses
+- [ ] **Search + date filters** — text search and date range on All Cases view
+- [ ] **Pagination** — proper page controls replacing hard LIMIT 500
+- [ ] **Smart auto-refresh** — fetch-based polling with notification bar (no jarring full-page reload)
+- [ ] **Reprocess button** — re-run OCR on failed/poor_scan cases from the dashboard
+- [ ] **Mobile responsive** — card layout for phone/tablet access
 
 ## Still Needed From CPG
 
@@ -229,24 +288,41 @@ insurance-sorting/
 ├── config/
 │   └── insurance_blocklist.csv       # Non-participating insurances + ID prefixes
 ├── src/
-│   ├── ocr.py                        # Tesseract OCR + quality scoring
+│   ├── ocr.py                        # Tesseract OCR + quality scoring + DPI normalization
 │   ├── parser.py                     # Extract insurance name + ID from OCR text
 │   ├── matcher.py                    # Rules engine — match against blocklist
 │   ├── pipeline.py                   # End-to-end processing with quality overrides
-│   ├── watcher.py                    # Queue-based folder watcher
+│   ├── watcher.py                    # Queue-based folder watcher + catchup scan
 │   ├── reporter.py                   # Generate daily flagged-cases report
-│   ├── db.py                         # SQLite with context managers + auto-migration
-│   └── web.py                        # Flask dashboard with scan quality alerts
+│   ├── db.py                         # SQLite with context managers + column whitelist
+│   └── web.py                        # Flask dashboard + file upload + Waitress server
+├── deploy/
+│   ├── setup.bat                     # Windows setup script (checks Python, Tesseract, creates venv)
+│   ├── start-web.bat                 # Start web dashboard
+│   ├── start-watcher.bat             # Start folder watcher
+│   ├── install-service.bat           # Install as Windows services via NSSM
+│   └── check-health.bat              # Health check script
 ├── data/
 │   └── flagged_cases.db              # SQLite database (created at runtime)
 ├── reports/                           # Generated CSV/Excel reports
-├── sample_reqs/                       # Test requisition images (including poor scan sample)
+├── logs/                              # Service logs (created at runtime)
+├── scans/                             # Uploaded scans (created at runtime)
+├── sample_reqs/                       # Test requisition images
 ├── tests/
 │   ├── test_parser.py                # 5 tests
 │   ├── test_matcher.py               # 6 tests
 │   ├── test_db.py                    # 1 test
 │   └── create_sample_req.py          # Sample image generator
-├── requirements.txt
+├── Dockerfile                         # Docker container build
+├── docker-compose.yml                 # Docker Compose (web + watcher services)
+├── docker-entrypoint.sh               # Container entrypoint
+├── .dockerignore                      # Docker build exclusions
+├── .env.example                       # Environment variable template
+├── requirements.txt                   # Python dependencies
 ├── run.py                             # CLI entry point
-└── PRD.md                             # This document
+├── PRD.md                             # This document
+├── DEPLOY.md                          # Deployment guide (Docker + portable Windows)
+├── USER_GUIDE.md                      # Staff user guide with pipeline diagram
+├── IMPROVEMENT_REPORT.md              # Research findings from 4 review agents
+└── RECOMMENDATIONS.md                 # Pre-deployment recommendations
 ```
