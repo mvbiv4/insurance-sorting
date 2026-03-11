@@ -1,0 +1,17 @@
+__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+*.md
+tests/
+sample_reqs/
+data/*.db
+data/*.db-wal
+data/*.db-shm
+reports/*.csv
+reports/*.xlsx
+logs/
+web.log
+.env
+*.bak

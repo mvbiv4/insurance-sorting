@@ -1,0 +1,9 @@
+insurance_name,id_prefix,notes
+Blue Cross Blue Shield of North Carolina,YMM,Example - replace with real data
+BCBS-NC,YMM,Alternate name variant
+Blue Cross NC,YMM,Alternate name variant
+Aetna,W99,Example - replace with real data
+United Healthcare,UHC,Example - replace with real data
+UnitedHealthcare,UHC,Alternate spelling
+Cigna,CIG,Example - replace with real data
+Humana,HUM,Example - replace with real data

@@ -1,0 +1,35 @@
+services:
+  # Web dashboard — always running, staff access on port 5000
+  web:
+    build: .
+    container_name: insurance-sorting-web
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # File watcher — monitors scan folder, processes new files
+  watcher:
+    build: .
+    container_name: insurance-sorting-watcher
+    command: python run.py watch /app/scans
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      - ${SCAN_FOLDER:-./scans}:/app/scans:ro
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
