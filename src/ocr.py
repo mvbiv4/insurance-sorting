@@ -1,7 +1,6 @@
 """Tesseract OCR wrapper with image preprocessing for scanned requisitions."""
 
 import logging
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -204,7 +203,7 @@ def extract_text(filepath: Path, preprocess: bool = True) -> str:
 # OCR quality thresholds
 OCR_QUALITY_GOOD = 78       # Above this = good scan
 OCR_QUALITY_POOR = 40       # Below this = poor scan, likely unreadable
-# Between 40-70 = fair (may have errors)
+# Between 40-78 = fair (may have errors)
 
 
 def assess_ocr_quality(filepath: Path, preprocess: bool = True) -> dict:

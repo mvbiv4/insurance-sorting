@@ -12,6 +12,7 @@ Usage:
 
 import sys
 import argparse
+import logging
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -69,18 +70,17 @@ def cmd_report(args):
 
 
 def cmd_status(args):
-    conn = db.get_connection()
-    db.init_db(conn)
+    with db.connection() as conn:
+        db.init_db(conn)
 
-    row = conn.execute("SELECT COUNT(*) as total FROM requisitions").fetchone()
-    print(f"Total processed: {row['total']}")
+        row = conn.execute("SELECT COUNT(*) as total FROM requisitions").fetchone()
+        print(f"Total processed: {row['total']}")
 
-    for status in ("flagged", "needs_review", "poor_scan", "clear", "handled", "error"):
-        row = conn.execute(
-            "SELECT COUNT(*) as cnt FROM requisitions WHERE status = ?", (status,)
-        ).fetchone()
-        print(f"  {status:>15}: {row['cnt']}")
-    conn.close()
+        for status in ("flagged", "needs_review", "poor_scan", "clear", "handled", "error"):
+            row = conn.execute(
+                "SELECT COUNT(*) as cnt FROM requisitions WHERE status = ?", (status,)
+            ).fetchone()
+            print(f"  {status:>15}: {row['cnt']}")
 
 
 def cmd_web(args):
@@ -89,6 +89,10 @@ def cmd_web(args):
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
     parser = argparse.ArgumentParser(description="Insurance Requisition Sorting System")
     sub = parser.add_subparsers(dest="command")
 

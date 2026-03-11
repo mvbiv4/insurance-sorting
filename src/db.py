@@ -84,8 +84,19 @@ def file_already_processed(conn: sqlite3.Connection, filepath: str) -> bool:
     return row is not None
 
 
+VALID_COLUMNS = {
+    "filename", "filepath", "processed_at", "ocr_text",
+    "insurance_name_extracted", "insurance_id_extracted",
+    "status", "match_type", "match_confidence", "matched_against",
+    "notes", "ocr_quality", "ocr_quality_label",
+}
+
+
 def insert_result(conn: sqlite3.Connection, **kwargs) -> int:
     kwargs.setdefault("processed_at", datetime.now().isoformat())
+    invalid = set(kwargs.keys()) - VALID_COLUMNS
+    if invalid:
+        raise ValueError(f"Invalid column names: {invalid}")
     cols = ", ".join(kwargs.keys())
     placeholders = ", ".join(["?"] * len(kwargs))
     try:

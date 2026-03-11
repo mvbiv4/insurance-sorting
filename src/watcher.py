@@ -12,10 +12,6 @@ from watchdog.events import FileSystemEventHandler
 
 from .pipeline import process_file
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
 log = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".pdf", ".tif", ".tiff", ".jpg", ".jpeg", ".png", ".bmp"}

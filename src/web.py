@@ -11,6 +11,7 @@ Staff scanning documents see real-time results:
 import csv
 import io
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -23,7 +24,8 @@ from .reporter import generate_report
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = "cpg-insurance-sorting-local-only"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(32))
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB upload limit
 
 VALID_STATUSES = {"flagged", "needs_review", "clear", "handled", "error", "poor_scan"}
 
@@ -343,9 +345,18 @@ class InlineLoader(BaseLoader):
 
 app.jinja_loader = InlineLoader()
 
-# Initialize DB once at import time for non-run_web usage (e.g., upload route)
-with db.connection() as _conn:
-    db.init_db(_conn)
+_db_initialized = False
+
+def _ensure_db():
+    global _db_initialized
+    if not _db_initialized:
+        with db.connection() as conn:
+            db.init_db(conn)
+        _db_initialized = True
+
+@app.before_request
+def before_request():
+    _ensure_db()
 
 
 @app.errorhandler(Exception)
