@@ -343,6 +343,10 @@ class InlineLoader(BaseLoader):
 
 app.jinja_loader = InlineLoader()
 
+# Initialize DB once at import time for non-run_web usage (e.g., upload route)
+with db.connection() as _conn:
+    db.init_db(_conn)
+
 
 @app.errorhandler(Exception)
 def handle_error(e):
@@ -357,7 +361,6 @@ def handle_error(e):
 @app.route("/")
 def dashboard():
     with db.connection() as conn:
-        db.init_db(conn)
         counts = get_counts(conn)
         cases = conn.execute(
             "SELECT * FROM requisitions WHERE status IN ('flagged', 'needs_review', 'poor_scan') ORDER BY "
@@ -375,7 +378,6 @@ def dashboard():
 @app.route("/all")
 def all_cases():
     with db.connection() as conn:
-        db.init_db(conn)
         counts = get_counts(conn)
         filter_status = request.args.get("status", "")
         # Validate status filter to prevent unexpected queries
@@ -400,7 +402,6 @@ def all_cases():
 @app.route("/blocklist")
 def blocklist_page():
     with db.connection() as conn:
-        db.init_db(conn)
         counts = get_counts(conn)
 
     try:
@@ -521,7 +522,6 @@ def upload_scan():
 @app.route("/mark-handled/<int:req_id>", methods=["POST"])
 def mark_handled(req_id):
     with db.connection() as conn:
-        db.init_db(conn)
         # Verify the record exists
         row = conn.execute("SELECT id, status FROM requisitions WHERE id = ?", (req_id,)).fetchone()
         if not row:

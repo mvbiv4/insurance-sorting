@@ -37,18 +37,23 @@ class ReqHandler(FileSystemEventHandler):
             self.file_queue.put(path)
 
 
-def _wait_for_file_ready(filepath: Path, timeout: float = 30, interval: float = 1) -> bool:
-    """Wait until a file is no longer being written to (stable size)."""
+def _wait_for_file_ready(filepath: Path, timeout: float = 30, interval: float = 1, stable_count: int = 3) -> bool:
+    """Wait until a file is no longer being written to (stable size for multiple checks)."""
     prev_size = -1
+    consecutive_stable = 0
     elapsed = 0.0
     while elapsed < timeout:
         try:
             current_size = filepath.stat().st_size
             if current_size == prev_size and current_size > 0:
-                return True
+                consecutive_stable += 1
+                if consecutive_stable >= stable_count:
+                    return True
+            else:
+                consecutive_stable = 0
             prev_size = current_size
         except OSError:
-            pass  # File may not exist yet or still locked
+            consecutive_stable = 0
         time.sleep(interval)
         elapsed += interval
     return filepath.exists()
@@ -75,6 +80,22 @@ def _process_worker(file_queue: Queue):
             file_queue.task_done()
 
 
+def _catchup_scan(folder_path: Path, file_queue: Queue):
+    """Process files that arrived while the watcher was offline."""
+    from . import db
+    with db.connection() as conn:
+        db.init_db(conn)
+        for f in sorted(folder_path.iterdir()):
+            if f.suffix.lower() in SUPPORTED_EXTENSIONS and not f.name.startswith("."):
+                try:
+                    resolved = str(f.resolve())
+                except OSError:
+                    resolved = str(f)
+                if not db.file_already_processed(conn, resolved):
+                    log.info(f"Catchup: queuing {f.name}")
+                    file_queue.put(f)
+
+
 def watch_folder(folder: str, recursive: bool = False):
     """Watch a folder for new requisition files and process them."""
     folder_path = Path(folder)
@@ -86,6 +107,9 @@ def watch_folder(folder: str, recursive: bool = False):
     log.info(f"Supported file types: {', '.join(sorted(SUPPORTED_EXTENSIONS))}")
 
     file_queue = Queue()
+
+    # Catch up on files that arrived while watcher was offline
+    _catchup_scan(folder_path, file_queue)
 
     # Start worker thread for processing (non-blocking)
     worker = threading.Thread(target=_process_worker, args=(file_queue,), daemon=True)

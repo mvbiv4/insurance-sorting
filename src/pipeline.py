@@ -90,11 +90,6 @@ def process_file(filepath: Path, blocklist=None) -> MatchResult:
 
         except Exception as e:
             log.error(f"Error processing {filepath.name}: {e}", exc_info=True)
-            try:
-                resolved = str(filepath.resolve())
-            except OSError:
-                resolved = str(filepath)
-
             db.insert_result(
                 conn,
                 filename=filepath.name,
