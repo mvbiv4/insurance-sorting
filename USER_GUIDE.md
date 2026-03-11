@@ -83,7 +83,58 @@ A poor scan means the system could not read the form well enough to check the in
 
 ---
 
-## 7. Managing the Blocklist
+## 7. How the System Works
+
+When a scan enters the system, it goes through five steps automatically:
+
+```
+  Scanned image drops into folder
+          │
+          ▼
+     ┌─────────┐
+     │ Tesseract│  ← OCR extracts text + per-word confidence scores
+     │   OCR    │
+     └────┬─────┘
+          │
+          ▼
+     ┌─────────┐
+     │ Quality  │  ← Score < 40%? → "poor_scan" (orange alert)
+     │  Check   │     Score 40-78%? → "fair" (extra caution)
+     └────┬─────┘
+          │
+          ▼
+     ┌─────────┐
+     │  Parser  │  ← Regex extracts: insurance name, member ID, group #
+     └────┬─────┘
+          │
+          ▼
+     ┌─────────┐
+     │ Matcher  │  ← Checks extracted fields against blocklist CSV
+     │          │     Exact name, fuzzy name (85%+), ID prefix match
+     └────┬─────┘
+          │
+          ▼
+     ┌─────────┐
+     │   DB     │  ← Stores result in SQLite, shows on dashboard
+     └─────────┘
+```
+
+**Step 1 — OCR:** The system reads the scanned image and converts it to text using optical character recognition. It also scores how confident it is in each word it reads.
+
+**Step 2 — Quality Check:** If the average confidence score is below 40%, the scan is marked as **Poor Scan** and flagged for manual review. If it's between 40-78%, the system treats results with extra caution.
+
+**Step 3 — Parser:** The system looks for key fields on the form — the **insurance name**, **member ID**, and **group number** — using pattern matching.
+
+**Step 4 — Matcher:** The extracted insurance info is compared against the **blocklist** (the list of non-participating insurances). It checks three ways:
+- **Exact name match** — the insurance name matches a blocklist entry exactly
+- **Fuzzy name match** — the name is close enough (85%+ similarity), which catches minor OCR misreads
+- **ID prefix match** — the member ID starts with a known prefix for a non-participating insurer (e.g., "YMM" for BCBS-NC)
+
+**Step 5 — Store & Display:** The result is saved and immediately appears on the dashboard for staff to act on.
+
+---
+
+## 8. Managing the Blocklist
 
 The blocklist is the list of non-participating insurances. When a scanned insurance matches an entry on this list, the case gets flagged.
 
@@ -96,7 +147,7 @@ Changes take effect immediately for all new scans. Previously processed cases ar
 
 ---
 
-## 8. Exporting Reports
+## 9. Exporting Reports
 
 1. Click the **Export CSV** button (available on the dashboard or All Cases view).
 2. A file will download to your computer containing all processed cases.
@@ -105,7 +156,7 @@ Changes take effect immediately for all new scans. Previously processed cases ar
 
 ---
 
-## 9. Automatic Folder Watching
+## 10. Automatic Folder Watching
 
 If your supervisor has set up the folder watcher:
 
@@ -117,7 +168,7 @@ Ask your supervisor which folder is being watched if you are unsure.
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 **The page won't load**
 - Make sure the server is running. Ask your supervisor or IT contact.
